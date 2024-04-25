@@ -3,3 +3,4 @@ logs
 flask_session
 .idea
 .venv
+__pycache__
