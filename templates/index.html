@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Docker Image Sync</title>
+  <link rel="icon" href="static/favicon.ico">
+  <!-- 引入 layui.css -->
+  <!--    <link href="//unpkg.com/layui@2.9.3/dist/css/layui.css" rel="stylesheet">-->
+  <link rel="stylesheet" href="{{ url_for('static', filename='layui/css/layui.css') }}">
+</head>
+<body>
+<div>
+  <h3 style="display: inline">&nbsp;&nbsp;&nbsp;&nbsp;{{ html_const['heading'] }}</h3>
+  <a style="color: #16baaa;" href="logout">&nbsp;&nbsp;&nbsp;&nbsp;[退出登录]</a>
+  <hr class="layui-border-green">
+</div>
+
+<iframe name="hidden-frame" id="hidden-frame" style="display:none"></iframe>
+
+<!-- 给容器追加 class="layui-form-pane"，即可显示为方框风格 -->
+<form id="syncForm" class="layui-form layui-form-pane" action="{{ url_for('sync') }}" method="post" target="hidden-frame">
+  <div class="layui-form-item">
+    <label class="layui-form-label">仓库地址</label>
+    <div class="layui-col-md11">
+      <input type="text" name="private_registry" placeholder="选填，如果镜像是私有的，需要登录授权" class="layui-input">
+    </div>
+    <label class="layui-form-label">账&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;号</label>
+    <div class="layui-col-md11">
+      <input type="text" name="private_user" placeholder="选填，如果镜像是私有的，需要登录授权" class="layui-input">
+    </div>
+    <label class="layui-form-label">密&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;码</label>
+    <div class="layui-col-md11">
+      <input type="password" name="private_passwd" placeholder="选填，如果镜像是私有的，需要登录授权" class="layui-input">
+    </div>
+    <label class="layui-form-label">镜像地址</label>
+    <div class="layui-col-md11">
+      <textarea name="source_images"
+                lay-verify="required"
+                placeholder="同步的镜像地址，支持多行{% for p in html_const['placeholder'] %}&#10{{ p }}{% endfor %}"
+                autocomplete="off"
+                rows="5"
+                class="layui-textarea"></textarea>
+    </div>
+  </div>
+
+  <div class="layui-form-item">
+    <label class="layui-form-label">目的仓库</label>
+    <div class="layui-col-md11">
+      <select name="repository_key_value" lay-filter="repo-select-filter" lay-verify="required">
+        <option value="" selected></option>
+        {% for key in repositories.keys() %}
+          <option value="{{ key }}">{{ repositories[key]['name'] + ' ' + repositories[key]['url'] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <label class="layui-form-label">项目名称</label>
+    <div class="layui-col-md11">
+      <select name="project_value" lay-filter="project-select-filter" lay-verify="required">
+        <option value="" selected></option>
+      </select>
+    </div>
+    <label class="layui-form-label">
+      扁平化
+      <i class="layui-icon layui-icon-tips-fill" id="i_tips"></i>
+    </label>
+    <div class="layui-col-md11">
+      <select name="flatten_level_value" lay-verify="required">
+        <option value="-1" selected>替换所有级(默认)</option>
+        <option value="0">无替换</option>
+        <option value="1">替换1级</option>
+        <option value="2">替换2级</option>
+        <option value="3">替换3级</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="layui-form-item">
+    <label class="layui-form-label">实时日志</label>
+    <div class="layui-col-md11">
+      <textarea id="logArea" placeholder="" class="layui-textarea" rows="11" disabled></textarea>
+    </div>
+  </div>
+
+  <div class="layui-form-item">
+    <label class="layui-form-label layui-hide-v"></label>
+    <button class="layui-btn" lay-submit lay-filter="syncNow">立即同步</button>
+    <button type="reset" class="layui-btn layui-btn-primary">重置</button>
+    <button type="button" class="layui-btn layui-btn-primary" id="eraseLog">清空日志</button>
+  </div>
+</form>
+
+<!--  <script src="//unpkg.com/layui@2.9.3/dist/layui.js"></script>-->
+<script src="{{ url_for('static', filename='layui/layui.js') }}"></script>
+<script>
+layui.use(function() {
+  var $ = layui.$;
+  var form = layui.form;
+  var util = layui.util;
+  var layer = layui.layer;
+
+  // select 事件，选择“目的仓库”时触发事件
+  form.on('select(repo-select-filter)', function(data) {
+    var elem = data.elem;  // 获得 select 原始 DOM 对象
+    var value = data.value; // 获得被选中的值
+    var othis = data.othis; // 获得 select 元素被替换后的 jQuery 对象
+
+    // 序列化为json字符串
+    var repos = {{ repositories|tojson }};
+
+    // 置空“项目”选择框
+    $('select[lay-filter="project-select-filter"]').empty();
+
+    // 默认选择项
+    $('select[lay-filter="project-select-filter"]').append('<option value="" selected></option>');
+
+    // 如果值不为空
+    if (value !== '') {
+      repos[value]['projects'].map((item) => {
+        $('select[lay-filter="project-select-filter"]').append(`<option value="${item}">` + item + '</option>');
+      });
+    };
+
+    // 当表单元素被动态插入时，需主动进行组件渲染才能显示
+    layui.form.render('select');  // 仅渲染select元素
+  });
+
+  var tipContent = `
+  <div>
+    假设源仓库的层级结构为'a/b/c/d/img'<br>
+    且目标项目名称为'ns'，<br>
+    则每一项对应的结果如下：<br>
+    替换所有级：'a/b/c/d/img' -> 'ns/img'<br>
+    无替换：'a/b/c/d/img' -> 'ns/a/b/c/d/img'<br>
+    替换1级：'a/b/c/d/img' -> 'ns/b/c/d/img'<br>
+    替换2级：'a/b/c/d/img' -> 'ns/c/d/img'<br>
+    替换3级：'a/b/c/d/img' -> 'ns/d/img'
+  </div>
+  `;
+
+  // 扁平化提示信息
+  $('#i_tips').hover(function() {
+    layer.tips(tipContent, this, {
+      tips: [1, '#16baaa'],  // 1表示向上，2表示向右
+      time: 0
+    });
+  }, function() {
+    layer.closeAll('tips');
+  });
+
+  // 立即同步
+  form.on('submit(syncNow)', function() {
+      layer.msg("开始同步！");
+
+      // 同步开始，置灰相关元素
+      const syncForm = document.getElementById('syncForm');
+      syncForm.querySelectorAll('input, select, textarea:not(#logArea), button').forEach(function(element) {
+          element.classList.add('disabled-gray');
+      });
+  });
+
+  // 清空日志
+  $('#eraseLog').click(function() {
+      var logArea = document.getElementById('logArea');
+      while (logArea.firstChild) {
+          logArea.removeChild(logArea.firstChild);
+      }
+  });
+});
+</script>
+
+<script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+<script type="text/javascript" charset="utf-8">
+    var socket = io();
+    socket.on('connect', function() {
+        console.log('Connected to WebSocket server!');
+        // socket.send({'sid': socket.id});
+    });
+
+    // 实时日志
+    socket.on('log', function(data) {
+        // console.log(data);
+        var logArea = document.getElementById('logArea');
+
+        var fragment = document.createDocumentFragment();
+        var text= document.createTextNode(data.log + '\n');
+        fragment.appendChild(text);
+        logArea.appendChild(fragment);
+
+        logArea.scrollTop = logArea.scrollHeight;  // 滚动到底部
+
+        // 同步完成，恢复置灰的元素
+        if (data.done_flag) {
+            const syncForm = document.getElementById('syncForm');
+            syncForm.querySelectorAll('input, select, textarea:not(#logArea), button').forEach(function(element) {
+                element.classList.remove('disabled-gray');
+            });
+        }
+    });
+</script>
+
+<style>
+.disabled-gray {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+</style>
+
+</body>
+</html>

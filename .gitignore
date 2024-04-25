@@ -1,0 +1,9 @@
+# 忽略的目录
+dev/
+logs/
+flask_session/
+.idea
+.venv
+
+# 忽略的文件
+*.log

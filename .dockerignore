@@ -1,0 +1,5 @@
+dev
+logs
+flask_session
+.idea
+.venv

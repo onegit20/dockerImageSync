@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Docker Image Sync</title>
+  <link rel="icon" href="static/favicon.ico">
+<!--  <link href="//unpkg.com/layui@2.9.3/dist/css/layui.css" rel="stylesheet">-->
+  <link rel="stylesheet" href="{{ url_for('static', filename='layui/css/layui.css') }}">
+</head>
+<body>
+<style>
+.demo-login-container{width: 320px; margin: 21px auto 0;}
+.demo-login-other .layui-icon{position: relative; display: inline-block; margin: 0 2px; top: 2px; font-size: 26px;}
+</style>
+<form class="layui-form" method="post">
+  <div class="demo-login-container">
+    <div class="layui-form-item">
+      <div class="layui-input-wrap">
+        <h3 style="text-align: center;">{{ html_const['heading'] }}</h3>
+        {% with errors = get_flashed_messages(category_filter=["error"]) %}
+          {% if errors %}
+            <a class="close" href="" style="color:#FF0000">x&nbsp;&nbsp;&nbsp;</a>
+            {%- for msg in errors %}
+              <span style="color:#FF0000"> {{ msg }} </span>
+            {% endfor -%}
+          {% endif %}
+        {% endwith %}
+      </div>
+    </div>
+    <div class="layui-form-item">
+      <div class="layui-input-wrap">
+        <div class="layui-input-prefix">
+          <i class="layui-icon layui-icon-username"></i>
+        </div>
+        <input type="text" name="username" value="{{ username }}" lay-verify="required" placeholder="用户名" lay-reqtext="请填写用户名" autocomplete="off" class="layui-input" lay-affix="clear">
+      </div>
+    </div>
+    <div class="layui-form-item">
+      <div class="layui-input-wrap">
+        <div class="layui-input-prefix">
+          <i class="layui-icon layui-icon-password"></i>
+        </div>
+        <input type="password" name="password" value="{{ password }}" lay-verify="required" placeholder="密   码" lay-reqtext="请填写密码" autocomplete="off" class="layui-input" lay-affix="eye">
+      </div>
+    </div>
+    <div class="layui-form-item">
+      <button class="layui-btn layui-btn-fluid" lay-submit lay-filter="demo-login">登录</button>
+    </div>
+  </div>
+</form>
+
+</body>
+</html>
