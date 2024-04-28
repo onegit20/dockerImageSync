@@ -18,10 +18,11 @@
   <hr class="layui-border-green">
 </div>
 
-<iframe name="hidden-frame" id="hidden-frame" style="display:none"></iframe>
+<!--<iframe name="hidden-frame" id="hidden-frame" style="display:none"></iframe>-->
 
 <!-- 给容器追加 class="layui-form-pane"，即可显示为方框风格 -->
-<form id="syncForm" class="layui-form layui-form-pane" action="{{ url_for('sync') }}" method="post" target="hidden-frame">
+<!--<form id="syncForm" class="layui-form layui-form-pane" action="{{ url_for('sync') }}" method="post" target="hidden-frame">-->
+<form id="syncForm" class="layui-form layui-form-pane" action="{{ url_for('sync') }}" method="post">
   <div class="layui-form-item">
     <label class="layui-form-label">仓库地址</label>
     <div class="layui-col-md11">
@@ -92,16 +93,47 @@
   </div>
 </form>
 
+<script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+<script type="text/javascript" charset="utf-8">
+    /* 建立WebSocket连接 */
+    var socket = io();
+    socket.on('connect', function() {
+        console.log('Connected to WebSocket server!');
+        // socket.send({'sid': socket.id});
+    });
+
+    /* 实时日志 */
+    socket.on('log', function(data) {
+        // console.log(data);
+        var logArea = document.getElementById('logArea');
+
+        var fragment = document.createDocumentFragment();
+        var text= document.createTextNode(data.log + '\n');
+        fragment.appendChild(text);
+        logArea.appendChild(fragment);
+
+        logArea.scrollTop = logArea.scrollHeight;  // 滚动到底部
+
+        // 同步完成，恢复置灰的元素
+        if (data.done_flag) {
+            const syncForm = document.getElementById('syncForm');
+            syncForm.querySelectorAll('input, select, textarea:not(#logArea), button').forEach(function(element) {
+                element.classList.remove('disabled-gray');
+            });
+        }
+    });
+</script>
+
 <!--  <script src="//unpkg.com/layui@2.9.3/dist/layui.js"></script>-->
 <script src="{{ url_for('static', filename='layui/layui.js') }}"></script>
-<script>
+<script type="text/javascript" charset="utf-8">
 layui.use(function() {
   var $ = layui.$;
   var form = layui.form;
   var util = layui.util;
   var layer = layui.layer;
 
-  // select 事件，选择“目的仓库”时触发事件
+  /* 选择“目的仓库”时触发事件 */
   form.on('select(repo-select-filter)', function(data) {
     var elem = data.elem;  // 获得 select 原始 DOM 对象
     var value = data.value; // 获得被选中的值
@@ -127,41 +159,66 @@ layui.use(function() {
     layui.form.render('select');  // 仅渲染select元素
   });
 
+  /* 扁平化提示信息 */
   var tipContent = `
-  <div>
-    假设源仓库的层级结构为'a/b/c/d/img'<br>
-    且目标项目名称为'ns'，<br>
-    则每一项对应的结果如下：<br>
-    替换所有级：'a/b/c/d/img' -> 'ns/img'<br>
-    无替换：'a/b/c/d/img' -> 'ns/a/b/c/d/img'<br>
-    替换1级：'a/b/c/d/img' -> 'ns/b/c/d/img'<br>
-    替换2级：'a/b/c/d/img' -> 'ns/c/d/img'<br>
-    替换3级：'a/b/c/d/img' -> 'ns/d/img'
-  </div>
-  `;
+    <div>
+      假设源仓库的层级结构为'a/b/c/d/img'<br>
+      且目标项目名称为'ns'，<br>
+      则每一项对应的结果如下：<br>
+      替换所有级：'a/b/c/d/img' -> 'ns/img'<br>
+      无替换：'a/b/c/d/img' -> 'ns/a/b/c/d/img'<br>
+      替换1级：'a/b/c/d/img' -> 'ns/b/c/d/img'<br>
+      替换2级：'a/b/c/d/img' -> 'ns/c/d/img'<br>
+      替换3级：'a/b/c/d/img' -> 'ns/d/img'
+    </div>`;
+  $('#i_tips').hover(
+    function() {
+      layer.tips(tipContent, this, {
+        tips: [1, '#16baaa'],  // 1表示向上，2表示向右
+        time: 0
+      });
+    },
+    function() {
+      layer.closeAll('tips');
+    }
+  );
 
-  // 扁平化提示信息
-  $('#i_tips').hover(function() {
-    layer.tips(tipContent, this, {
-      tips: [1, '#16baaa'],  // 1表示向上，2表示向右
-      time: 0
-    });
-  }, function() {
-    layer.closeAll('tips');
-  });
-
-  // 立即同步
+  /* 立即同步 */
   form.on('submit(syncNow)', function() {
       layer.msg("开始同步！");
+      // console.log(socket.id);
 
       // 同步开始，置灰相关元素
       const syncForm = document.getElementById('syncForm');
       syncForm.querySelectorAll('input, select, textarea:not(#logArea), button').forEach(function(element) {
           element.classList.add('disabled-gray');
       });
+
+      // ajax提交请求
+      var url = '/sync';
+      var data = {};
+      var array = $('#syncForm').serializeArray();
+      $.each(array, function (_, item) {
+          data[item.name] = item.value;
+      });
+      data['sid'] = socket.id;
+
+      $.ajax({
+          url: url,
+          type: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify(data),
+          success: function(res) {
+            console.log('Result:', res);
+          },
+          error: function(err) {
+            console.error('Error:', err);
+          }
+      });
+      return false; // 阻止默认 form 跳转
   });
 
-  // 清空日志
+  /* 清空日志 */
   $('#eraseLog').click(function() {
       var logArea = document.getElementById('logArea');
       while (logArea.firstChild) {
@@ -169,36 +226,6 @@ layui.use(function() {
       }
   });
 });
-</script>
-
-<script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
-<script type="text/javascript" charset="utf-8">
-    var socket = io();
-    socket.on('connect', function() {
-        console.log('Connected to WebSocket server!');
-        // socket.send({'sid': socket.id});
-    });
-
-    // 实时日志
-    socket.on('log', function(data) {
-        // console.log(data);
-        var logArea = document.getElementById('logArea');
-
-        var fragment = document.createDocumentFragment();
-        var text= document.createTextNode(data.log + '\n');
-        fragment.appendChild(text);
-        logArea.appendChild(fragment);
-
-        logArea.scrollTop = logArea.scrollHeight;  // 滚动到底部
-
-        // 同步完成，恢复置灰的元素
-        if (data.done_flag) {
-            const syncForm = document.getElementById('syncForm');
-            syncForm.querySelectorAll('input, select, textarea:not(#logArea), button').forEach(function(element) {
-                element.classList.remove('disabled-gray');
-            });
-        }
-    });
 </script>
 
 <style>

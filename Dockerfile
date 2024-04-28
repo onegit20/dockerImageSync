@@ -8,7 +8,7 @@ WORKDIR /app
 ADD sources.list /etc/apt/
 
 # 安装 tzdata 包并设置时区
-RUN apt-get update && apt-get install -y tzdata
+RUN apt-get update && apt-get install -y tzdata vim
 ENV TZ=Asia/Shanghai
 
 # 复制项目文件到容器中

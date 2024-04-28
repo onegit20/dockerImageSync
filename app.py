@@ -8,6 +8,7 @@ from flask_socketio import SocketIO
 # from flask_session import Session
 
 from config import Config
+# from dev.config_dev import Config
 import utils
 
 
@@ -29,6 +30,7 @@ login_manager.login_view = 'login'  # 登录页名称
 
 # 获取登录用户
 users = app.config['LOGIN_USERS']
+
 
 # 用户类，继承UserMixin
 class User(UserMixin):
@@ -92,35 +94,46 @@ def logout():
 @app.route('/sync', methods=['post'])
 @login_required
 def sync():
-    # 列表推导，去掉前后空白符，空行，空白行
-    source_images = [s.strip() for s in request.form.get('source_images').split(linesep) if re.search(r'\S', s)]  # List Comprehensions
-    repository_key = request.form.get('repository_key_value')
-    project = request.form.get('project_value')  # harbor仓库中的项目名
+    # # 获取表单数据，如果镜像是私有的，需要登录授权
+    # private_registry = request.form['private_registry']
+    # private_user = request.form['private_user']
+    # private_passwd = request.form['private_passwd']
+    #
+    # # 获取表单数据，列表推导，去掉前后空白符，空行，空白行
+    # source_images = [s.strip() for s in request.form.get('source_images').split(linesep) if re.search(r'\S', s)]  # List Comprehensions
+    # repository_key = request.form.get('repository_key_value')
+    # project = request.form.get('project_value')  # harbor仓库中的项目名
+    #
+    # # 获取表单数据，仓库扁平化选项值
+    # flatten_level = int(request.form['flatten_level_value'])
+
+    # 获取表单数据
+    data = request.get_json()
+    private_registry = data['private_registry']
+    private_user = data['private_user']
+    private_passwd = data['private_passwd']
+    source_images_string = data['source_images']
+    source_images = [s.strip() for s in source_images_string.split(linesep) if re.search(r'\S', s)]
+    repository_key = data['repository_key_value']
+    project = data['project_value']
+    flatten_level = int(data['flatten_level_value'])
+
+    session_id = (data['sid'])
 
     # 判断填写镜像地址是否合法
     pass
 
-    # 获取仓库账号/密码/url等信息
+    # 仓库账号/密码/url等信息
     username = repositories.get(repository_key).get('username')
     password = repositories.get(repository_key).get('password')
     registry = repositories[repository_key]['url']
-
-    # 如果镜像是私有的，需要登录授权
-    private_registry = request.form['private_registry']
-    private_user = request.form['private_user']
-    private_passwd = request.form['private_passwd']
-
-    # print(request.remote_addr)
-
-    # 获取仓库扁平化选项值
-    flatten_level = int(request.form['flatten_level_value'])
 
     logger = utils.LogManager('appLogger', 'log_manager.yml').logger
     handler = utils.DockerHandler(logger=logger, username=username, password=password, registry=registry)
 
     # 日志回调函数
     def send_sync_log(msg, done):
-        socketio.emit('log', {'log': msg, 'done_flag': done})
+        socketio.emit('log', {'log': msg, 'done_flag': done}, to=session_id)
     handler.set_callback(send_sync_log)
 
     # 如果镜像是私有的，需要登录授权
@@ -130,18 +143,25 @@ def sync():
     # 开始同步
     handler.sync(source_images=source_images, target_repository=registry, project=project, flatten_level=flatten_level)
 
-    return ''
+    return 'Done!'
 
 
 # @socketio.on('message')
 # def handle_response(data):
+#     print('1:')
 #     print(data['sid'])
-#     return data['sid']
 #
 #
 # @socketio.on('connect')
 # def handle_connect():
+#     print('2:')
 #     print(request.sid)
+#
+#
+# @socketio.on('disconnect')
+# def handle_disconnect():
+#     print('3:')
+#     print('断开连接')
 
 
 if __name__ == '__main__':

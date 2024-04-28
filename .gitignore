@@ -4,6 +4,7 @@ logs/
 flask_session/
 .idea
 .venv
+__pycache__
 
 # 忽略的文件
 *.log
