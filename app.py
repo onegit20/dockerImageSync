@@ -11,6 +11,7 @@ from config import Config
 # from dev.config_dev import Config
 import utils
 
+
 # 创建实例
 app = Flask(__name__)
 # 加载配置
@@ -147,8 +148,7 @@ def sync():
         handler.login(username=private_user, password=private_passwd, registry=private_registry)
 
     # 开始同步
-    handler.sync(source_images=source_images, target_repository=registry, project=project,
-                 flatten_level=flatten_level)
+    handler.sync(source_images=source_images, target_repository=registry, project=project, flatten_level=flatten_level)
 
     return 'Done!'
 

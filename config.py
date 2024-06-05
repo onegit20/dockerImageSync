@@ -2,6 +2,9 @@ class Config:
     # 会话密钥
     SECRET_KEY = '5JXWUv39aVJ5xUqR1k9OzXsGc0XlM6sYg4Qq4u6ga2q1Xe8N2vz0BKO1Yh0C2f32'
 
+    # session过期时间，单位秒，默认31天
+    # PERMANENT_SESSION_LIFETIME = 86400  # 24小时
+
     # # 使用基于服务器内存的会话存储
     # SESSION_TYPE = 'filesystem'
 
