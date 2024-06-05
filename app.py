@@ -11,7 +11,6 @@ from config import Config
 # from dev.config_dev import Config
 import utils
 
-
 # 创建实例
 app = Flask(__name__)
 # 加载配置
@@ -56,6 +55,9 @@ repositories_copy = deepcopy(repositories)
 for key in repositories_copy.keys():
     repositories_copy.get(key).pop('username')
     repositories_copy.get(key).pop('password')
+
+# 保存会话信息，全局变量
+sid = {}
 
 
 @app.route('/')
@@ -109,16 +111,17 @@ def sync():
 
     # 获取表单数据
     data = request.get_json()
-    private_registry = data['private_registry']
-    private_user = data['private_user']
-    private_passwd = data['private_passwd']
-    source_images_string = data['source_images']
+    private_registry = data.get('private_registry')
+    private_user = data.get('private_user')
+    private_passwd = data.get('private_passwd')
+    source_images_string = data.get('source_images')
     source_images = [s.strip() for s in source_images_string.split(linesep) if re.search(r'\S', s)]
-    repository_key = data['repository_key_value']
-    project = data['project_value']
-    flatten_level = int(data['flatten_level_value'])
+    repository_key = data.get('repository_key_value')
+    project = data.get('project_value')
+    flatten_level = int(data.get('flatten_level_value'))
 
-    session_id = (data['sid'])
+    # session_id = (data['sid'])
+    first_sid = data.get('firstSid')
 
     # 判断填写镜像地址是否合法
     pass
@@ -133,7 +136,10 @@ def sync():
 
     # 日志回调函数
     def send_sync_log(msg, done):
+        global sid
+        session_id = sid[first_sid]['currSid']
         socketio.emit('log', {'log': msg, 'done_flag': done}, to=session_id)
+
     handler.set_callback(send_sync_log)
 
     # 如果镜像是私有的，需要登录授权
@@ -141,27 +147,37 @@ def sync():
         handler.login(username=private_user, password=private_passwd, registry=private_registry)
 
     # 开始同步
-    handler.sync(source_images=source_images, target_repository=registry, project=project, flatten_level=flatten_level)
+    handler.sync(source_images=source_images, target_repository=registry, project=project,
+                 flatten_level=flatten_level)
 
     return 'Done!'
 
 
-# @socketio.on('message')
-# def handle_response(data):
-#     print('1:')
-#     print(data['sid'])
-#
-#
-# @socketio.on('connect')
-# def handle_connect():
-#     print('2:')
-#     print(request.sid)
-#
-#
-# @socketio.on('disconnect')
-# def handle_disconnect():
-#     print('3:')
-#     print('断开连接')
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+    print('session id: ' + request.sid)
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
+
+
+@socketio.on('message')
+def handle_msg(data):
+    print('Client send message event')
+    global sid
+    sid[data.get('firstSid')] = data  # 所有socket客户端会话信息都添加到sid字典
+    print(sid)
+
+
+@socketio.on('delete sid')
+def handle_delete_sid(data):
+    print('Client delete sid event')
+    global sid
+    sid.pop(data.get('firstSid'))  # 刷新或关闭页面从sid字典中删除记录，避免sid字典无限增大
+    print(sid)
 
 
 if __name__ == '__main__':

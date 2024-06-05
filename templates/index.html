@@ -94,12 +94,49 @@
 </form>
 
 <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+<!--<script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>-->
 <script type="text/javascript" charset="utf-8">
+    let isFirstTime = true;
+    let firstSid = '';
+
+    let reconn = false;
+    let prevSid = '';
+    let currSid = '';
+
     /* 建立WebSocket连接 */
     var socket = io();
     socket.on('connect', function() {
         console.log('Connected to WebSocket server!');
-        // socket.send({'sid': socket.id});
+        console.log('session id: ' + socket.id);
+
+        if (isFirstTime) {
+            firstSid = socket.id;  // 打开页面第一次连接websocket的sid来区分不同的页面
+            isFirstTime = false;
+        }
+
+        if (! reconn) {
+            currSid = socket.id;
+        } else {
+            prevSid = currSid;  // 保存sid到上一个sid
+            currSid = socket.id;  // 获取最新sid
+        }
+
+        socket.send({'firstSid': firstSid, 'reconn': reconn, 'prevSid': prevSid, 'currSid': currSid});
+
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Client disconnected');
+    });
+
+    socket.io.on('reconnect', () => {
+        console.log('Client reconnected');
+        reconn = true;
+    });
+
+    /* 监听页面刷新或关闭事件 */
+    window.addEventListener('beforeunload', function(event) {
+        socket.emit('delete sid', {'firstSid': firstSid, 'currSid': currSid});
     });
 
     /* 实时日志 */
@@ -201,7 +238,8 @@ layui.use(function() {
       $.each(array, function (_, item) {
           data[item.name] = item.value;
       });
-      data['sid'] = socket.id;
+      // data['sid'] = socket.id;
+      data['firstSid'] = firstSid;
 
       $.ajax({
           url: url,
